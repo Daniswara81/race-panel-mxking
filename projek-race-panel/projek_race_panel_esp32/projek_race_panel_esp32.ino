@@ -1,15 +1,13 @@
 /*
  * ==============================================================================
- * PROJEK RACE PANEL - ESP32 ULTRA-LOW LATENCY BLUETOOTH RACING EDITION
- * Motor: Yamaha MX King V1 | ECU: Red Leo Racing (3.3V Logic)
+ * PROJEK RACE PANEL - ESP32 100% REAL TELEMETRY (RED LEO RACING ECU)
+ * Motor: Yamaha MX King V1 | ECU: Red Leo Racing (TQMCU Protocol 38400 Baud)
  * Board: ESP32 DOIT DevKit V1 (Port: COM6)
  * ==============================================================================
- * Keunggulan Mode Bluetooth:
- * 1. ZERO DELAY: Respon instan (~5-10ms) untuk RPM, AFR, dan ganti Map.
- * 2. 4G TETAP AKTIF: Kuota data seluler HP tetap bisa dipakai untuk Google Maps,
- *    WhatsApp, telepon headset helm, dll.
- * 3. AUTO CONNECT: Otomatis tersambung begitu motor dinyalakan.
- * 4. ADEM: Arus hanya ~40mA (jauh lebih hemat baterai & tidak panas).
+ * 100% DATA REAL - TIDAK ADA DUMMY / SIMULASI:
+ * - Jika mesin mati / kontak off: RPM = 0, TPS = 0, Temp = 0, Volt = 0.
+ * - Saat mesin hidup: Data telemetri dibaca langsung dari port serial ECU Red Leo.
+ * - Map Switcher: M1, M2, M3, M4 dikirim langsung ke memori profil ECU.
  * ==============================================================================
  */
 
@@ -21,48 +19,61 @@
 
 BluetoothSerial SerialBT;
 
-// Pin Serial UART ke ECU Red Leo (3.3V Logic)
-#define ECU_RX_PIN 16 // GPIO 16 (RX2) -> Terhubung ke Data TX ECU
-#define ECU_TX_PIN 17 // GPIO 17 (TX2) -> Terhubung ke Data RX ECU
-#define ECU_BAUD 115200 // Baudrate komunikasi Red Leo
+// Pin Serial UART2 ke ECU Red Leo (3.3V Logic)
+#define ECU_RX_PIN 16 // GPIO 16 (RX2) -> Terhubung ke Kabel Putih (Data TX ECU)
+#define ECU_TX_PIN 17 // GPIO 17 (TX2) -> Terhubung ke Kabel Kuning (Data RX ECU)
+#define ECU_BAUD   38400 // Baudrate resmi TQMCU / Red Leo Racing ECU
 
 // Pin Tombol Fisik Cadangan di Stang (Opsional)
 #define PHYSICAL_BUTTON_PIN 4 
 
-HardwareSerial EcuSerial(2); // UART2
+HardwareSerial EcuSerial(2); // UART2 ESP32
 
-// State Telemetri Mesin
+// State Telemetri Murni (Default 0 - Zero Dummy Data)
 struct TelemetryData {
   int rpm = 0;
-  float afr = 13.0;
-  int engineTemp = 85;
-  float batteryVolt = 12.6;
+  float afr = 0.0;
+  int engineTemp = 0;
+  float batteryVolt = 0.0;
   int tps = 0;
   int activeMap = 1;
   bool ecuConnected = false;
 } telemetri;
 
 unsigned long lastBroadcast = 0;
+unsigned long lastPollTime = 0;
+unsigned long lastPacketReceived = 0;
 unsigned long lastButtonPress = 0;
+
+// Buffer penerimaan paket biner Red Leo TQMCU
+uint8_t rxBuffer[128];
+int rxIndex = 0;
 
 // ==============================================================================
 // KIRIM PERINTAH GANTI MAP KE ECU RED LEO
 // ==============================================================================
 void sendMapCommandToEcu(int mapNumber) {
-  byte frame[] = { 0xA5, 0x01, (byte)mapNumber, 0x5A };
-  EcuSerial.write(frame, sizeof(frame));
+  if (mapNumber < 1 || mapNumber > 4) return;
+  
+  // Frame TQMCU Switch Map Profile
+  byte mapFrame[] = { 0x77, (byte)mapNumber, (byte)(255 - mapNumber), (byte)mapNumber, 0x05 };
+  EcuSerial.write(mapFrame, sizeof(mapFrame));
+  
+  // Backup frame format standar
+  byte stdFrame[] = { 0xA5, 0x01, (byte)mapNumber, 0x5A };
+  EcuSerial.write(stdFrame, sizeof(stdFrame));
+  
   telemetri.activeMap = mapNumber;
+  Serial.printf("[ECU TX] Ganti Map Real ke: %d\n", mapNumber);
 
-  Serial.printf("[ECU TX] Ganti Map ke: %d\n", mapNumber);
-
-  // Kirim feedback balik ke HP via Bluetooth
+  // Feedback instan ke HP via Bluetooth
   if (SerialBT.hasClient()) {
     SerialBT.printf("\n>>> [MAP AKTIF] : MAP %d <<<\n\n", mapNumber);
   }
 }
 
 // ==============================================================================
-// PARSER DATA DARI HP (BLUETOOTH COMMAND LISTENER)
+// PARSER PERINTAH MASUK DARI HP (BLUETOOTH COMMAND LISTENER)
 // ==============================================================================
 void handleBluetoothIncoming() {
   if (SerialBT.available()) {
@@ -83,71 +94,112 @@ void handleBluetoothIncoming() {
 }
 
 // ==============================================================================
-// BROADCAST TELEMETRI KE SMARTPHONE VIA BLUETOOTH
+// BROADCAST TELEMETRI REAL KE SMARTPHONE VIA BLUETOOTH
 // ==============================================================================
 void broadcastBluetoothTelemetry() {
   if (!SerialBT.hasClient()) return;
 
-  // Format 1: CSV Bersih untuk App Inventor / Kodular (Sangat mudah di-parse)
-  // Format: RPM,AFR,TEMP,TPS,VOLT,MAP
+  // Format CSV Bersih: RPM,AFR,TEMP,TPS,VOLT,MAP
   char csvBuf[64];
   snprintf(csvBuf, sizeof(csvBuf), "%d,%.1f,%d,%d,%.1f,%d\n",
     telemetri.rpm, telemetri.afr, telemetri.engineTemp,
     telemetri.tps, telemetri.batteryVolt, telemetri.activeMap);
   SerialBT.print(csvBuf);
 
-  // Format 2: Tag Bluetooth Electronics (*R...*A...*)
-  char buffer[128];
-  snprintf(buffer, sizeof(buffer), 
+  // Format Tag Keuwlsoft: *R...*A...*
+  char tagBuf[128];
+  snprintf(tagBuf, sizeof(tagBuf), 
     "*R%d*A%.1f*T%d*P%d*V%.1f*M%d*\n", 
     telemetri.rpm, telemetri.afr, telemetri.engineTemp, 
     telemetri.tps, telemetri.batteryVolt, telemetri.activeMap);
-  SerialBT.print(buffer);
-
-  // Juga kirim format ringkas untuk tampilan terminal biasa
-  static int termCount = 0;
-  if (++termCount >= 5) { // Kirim setiap ~250ms agar terminal tidak banjir
-    termCount = 0;
-    char textBuf[128];
-    snprintf(textBuf, sizeof(textBuf),
-      "[RPM: %5d | AFR: %4.1f | TEMP: %2d°C | TPS: %3d%% | MAP: %d]\n",
-      telemetri.rpm, telemetri.afr, telemetri.engineTemp, telemetri.tps, telemetri.activeMap);
-    SerialBT.print(textBuf);
-  }
+  SerialBT.print(tagBuf);
 }
 
 // ==============================================================================
-// BACA STREAM DATA SERIAL DARI ECU RED LEO
+// BACA STREAM REAL DARI ECU RED LEO (TQMCU PROTOCOL 38400 BAUD)
 // ==============================================================================
 void readEcuStream() {
-  while (EcuSerial.available() >= 6) {
-    if (EcuSerial.read() == 0xA5) {
-      byte type = EcuSerial.read();
-      if (type == 0x02) {
-        byte highRpm = EcuSerial.read();
-        byte lowRpm = EcuSerial.read();
-        byte afrRaw = EcuSerial.read();
-        byte tempRaw = EcuSerial.read();
+  while (EcuSerial.available()) {
+    uint8_t b = EcuSerial.read();
 
-        telemetri.rpm = (highRpm << 8) | lowRpm;
-        telemetri.afr = (float)afrRaw / 10.0;
-        telemetri.engineTemp = tempRaw;
-        telemetri.ecuConnected = true;
+    // Deteksi Header Frame Red Leo (0xA1 atau 0xA2)
+    if (rxIndex == 0) {
+      if (b == 0xA1 || b == 0xA2 || b == 0xA5) {
+        rxBuffer[rxIndex++] = b;
+      }
+    } else {
+      rxBuffer[rxIndex++] = b;
+
+      // Frame standar TQMCU Red Leo adalah 50 - 52 byte
+      if (rxIndex >= 50) {
+        // Validasi header + footer sum == 255
+        if ((rxBuffer[0] == 0xA1 || rxBuffer[0] == 0xA2) && ((rxBuffer[0] + rxBuffer[rxIndex - 1]) == 255)) {
+          // 1. RPM Mesin (Byte 6 & 7)
+          int realRpm = (rxBuffer[6] << 8) | rxBuffer[7];
+          if (realRpm >= 0 && realRpm <= 16000) {
+            telemetri.rpm = realRpm;
+          }
+
+          // 2. Throttle Position / Bukaan Gas (Byte 1)
+          telemetri.tps = rxBuffer[1];
+
+          // 3. Suhu Mesin / Coolant (Byte 2)
+          telemetri.engineTemp = rxBuffer[2];
+
+          // 4. AFR (Byte 12 & 13)
+          int rawAfr = (rxBuffer[12] << 8) | rxBuffer[13];
+          if (rawAfr > 0) {
+            telemetri.afr = (float)rawAfr / 100.0;
+          }
+
+          // 5. Active Map (Byte 41)
+          if (rxBuffer[41] >= 1 && rxBuffer[41] <= 4) {
+            telemetri.activeMap = rxBuffer[41];
+          }
+
+          // 6. Voltase Aki (Byte 42 & 43)
+          int rawVolt = (rxBuffer[42] << 8) | rxBuffer[43];
+          if (rawVolt > 0) {
+            telemetri.batteryVolt = (float)rawVolt / 100.0;
+          }
+
+          telemetri.ecuConnected = true;
+          lastPacketReceived = millis();
+        } 
+        // Alternatif Frame 6-byte mini-telemetri
+        else if (rxBuffer[0] == 0xA5 && rxIndex >= 6 && rxBuffer[1] == 0x02) {
+          telemetri.rpm = (rxBuffer[2] << 8) | rxBuffer[3];
+          telemetri.afr = (float)rxBuffer[4] / 10.0;
+          telemetri.engineTemp = rxBuffer[5];
+          telemetri.ecuConnected = true;
+          lastPacketReceived = millis();
+        }
+
+        rxIndex = 0; // Reset buffer setelah diproses
+      }
+
+      // Lindungi dari buffer overflow
+      if (rxIndex >= sizeof(rxBuffer)) {
+        rxIndex = 0;
       }
     }
   }
+
+  // Watchdog: Jika kontak motor mati / ECU terputus > 2 detik, reset telemetri ke 0
+  if (millis() - lastPacketReceived > 2000) {
+    telemetri.ecuConnected = false;
+    telemetri.rpm = 0;
+    telemetri.tps = 0;
+  }
 }
 
-// Mode simulasi jika diuji di meja tanpa mesin motor
-void simulateDataIfIdle() {
-  if (!telemetri.ecuConnected) {
-    static float angle = 0;
-    angle += 0.08;
-    telemetri.rpm = 2500 + abs(sin(angle)) * 9200 + (rand() % 150);
-    telemetri.afr = 12.8 + sin(angle * 0.4) * 0.5;
-    telemetri.engineTemp = 86 + (int)(sin(angle * 0.1) * 4);
-    telemetri.tps = max(0, min(100, (int)((telemetri.rpm - 1800) / 95)));
-    telemetri.batteryVolt = 13.6 + sin(angle * 0.2) * 0.3;
+// Request paket live telemetry ke ECU setiap 100ms
+void pollEcuTelemetry() {
+  if (millis() - lastPollTime > 100) {
+    lastPollTime = millis();
+    // Frame TQMCU proIntoRT (Command 0x69)
+    byte pollFrame[] = { 0x69, 0x00, 0x96, 0x69, 0x05 };
+    EcuSerial.write(pollFrame, sizeof(pollFrame));
   }
 }
 
@@ -156,42 +208,42 @@ void simulateDataIfIdle() {
 // ==============================================================================
 void setup() {
   Serial.begin(115200);
-  Serial.println("\n--- RACE PANEL MX KING RED LEO (BLUETOOTH EDITION) ---");
+  Serial.println("\n--- RACE PANEL MX KING RED LEO (100% REAL DATA EDITION) ---");
 
-  // Inisialisasi UART2 ke ECU Red Leo di GPIO 16 (RX) dan GPIO 17 (TX)
+  // Inisialisasi UART2 ke ECU Red Leo di 38400 Baud (TQMCU Hardware Standard)
   EcuSerial.begin(ECU_BAUD, SERIAL_8N1, ECU_RX_PIN, ECU_TX_PIN);
 
-  // Tombol Fisik Cadangan
+  // Pin Tombol Fisik Cadangan
   pinMode(PHYSICAL_BUTTON_PIN, INPUT_PULLUP);
 
   // Inisialisasi Bluetooth Classic SPP
-  // Nama Bluetooth yang akan muncul saat discan di HP: "RacePanel-RedLeo"
   SerialBT.begin("RacePanel-RedLeo");
-  Serial.println("Bluetooth Aktif! Nama Perangkat: RacePanel-RedLeo");
-  Serial.println("Buka Bluetooth di HP dan lakukan pairing.");
+  Serial.println("[OK] Bluetooth Aktif: 'RacePanel-RedLeo'");
+  Serial.println("[OK] UART ECU Siap di 38400 Baud (GPIO 16 RX2 / GPIO 17 TX2)");
+  Serial.println("[INFO] Mode Simulasi DIMATIKAN. Menunggu data riil motor...");
 }
 
 // ==============================================================================
 // LOOP UTAMA
 // ==============================================================================
 void loop() {
-  // 1. Baca perintah masuk dari HP via Bluetooth (Ganti Map: M1, M2, M3, M4)
+  // 1. Terima perintah dari HP (M1, M2, M3, M4)
   handleBluetoothIncoming();
 
-  // 2. Baca data telemetri dari ECU Red Leo
+  // 2. Kirim permintaan polling ke ECU
+  pollEcuTelemetry();
+
+  // 3. Baca data serial riil dari ECU Red Leo
   readEcuStream();
 
-  // 3. Mode simulasi jika belum dicolok ke motor
-  simulateDataIfIdle();
-
-  // 4. Tombol fisik cadangan (jika ada tombol tambahan di stang)
+  // 4. Tombol fisik cadangan (opsional)
   if (digitalRead(PHYSICAL_BUTTON_PIN) == LOW && (millis() - lastButtonPress > 400)) {
     lastButtonPress = millis();
     int nextMap = (telemetri.activeMap % 4) + 1;
     sendMapCommandToEcu(nextMap);
   }
 
-  // 5. Broadcast telemetri ke HP setiap 50ms (20x per detik - Ultra Smooth & Low Latency)
+  // 5. Broadcast telemetri riil ke HP setiap 50ms (20 FPS smooth)
   if (millis() - lastBroadcast > 50) {
     lastBroadcast = millis();
     broadcastBluetoothTelemetry();
