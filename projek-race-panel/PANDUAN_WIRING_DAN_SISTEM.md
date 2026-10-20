@@ -30,7 +30,9 @@ Baris 2  │    [ MERAH ]        [ PUTIH ]     [ KUNING ] │
 
 ---
 
-## 2. Skema Penyambungan Aman ke ESP32 DOIT V1
+## 2. Skema Visual & Penyambungan Aman ke ESP32 DOIT V1
+
+![Skema Wiring Lengkap ESP32 ke Soket ECU Red Leo MX King](skema_wiring_lengkap.jpg)
 
 Untuk mencegah beban arus berlebih pada regulator ECU, **ESP32 dinyalakan secara mandiri** menggunakan charger USB motor/powerbank. Jalur yang terhubung ke ECU hanya data dan ground:
 
@@ -77,16 +79,16 @@ graph LR
 
 ```
 [ ECU RED LEO ] 
-      │ (Kabel Serial UART - 3 Kabel: Hitam, Putih, Kuning)
+      │ (Kabel Serial UART - 3 Kabel: Hitam, Putih, Kuning | 38.400 Baud TQMCU)
       ▼
 [ ESP32 DOIT V1 ] 
       │ (Memancarkan Bluetooth SPP: "RacePanel-RedLeo")
       ▼
 [ SMARTPHONE / HP ANDROID (Data 4G Tetap Nyala 100%) ]
-      │ (Aplikasi: Serial Bluetooth Terminal / Bluetooth Electronics)
+      │ (Aplikasi: Race Panel APK / Serial Bluetooth Terminal)
       ▼
 [ RACE PANEL DASHBOARD & CONTROL ]
-  • Stream Telemetri Real-time (~5-10ms latency)
+  • Stream Telemetri Real-time 100% Data Riil (~5-10ms latency)
   • RPM, AFR, Suhu Mesin (°C), Bukaan TPS (%), Voltase
   • Tombol Ganti Mapping: Tekan M1, M2, M3, M4 langsung dari HP!
 ```
