@@ -1,0 +1,7 @@
+node_modules/
+.gradle/
+**/build/
+**/.gradle/
+*.apk
+*.docx
+bluestacks-backup/

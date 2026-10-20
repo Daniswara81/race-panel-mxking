@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>RACE PANEL PREVIEW | MX KING RED LEO</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=Orbitron:wght@700;900&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #07090c;
+      --card-bg: rgba(18, 22, 29, 0.88);
+      --border: rgba(255, 255, 255, 0.1);
+      --cyan: #00f0ff;
+      --green: #00ff88;
+      --amber: #ffb700;
+      --red: #ff2a4b;
+      --glow-cyan: 0 0 16px rgba(0, 240, 255, 0.6);
+      --glow-red: 0 0 16px rgba(255, 42, 75, 0.6);
+      --font-racing: 'Orbitron', sans-serif;
+      --font-gauge: 'Rajdhani', sans-serif;
+      --font-tech: 'Chakra Petch', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body {
+      background: var(--bg);
+      color: #fff;
+      font-family: var(--font-gauge);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 0.85rem;
+      max-width: 650px;
+      margin: 0 auto;
+      background-image: radial-gradient(circle at 50% 10%, rgba(0, 240, 255, 0.08), transparent 60%),
+                        linear-gradient(to bottom, #0d1117, #06080b);
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 0.6rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0.85rem;
+    }
+    .brand-title {
+      font-family: var(--font-racing);
+      font-size: 1.15rem;
+      letter-spacing: 1.5px;
+      color: #fff;
+    }
+    .brand-title span { color: var(--red); }
+    .status-badge {
+      font-family: var(--font-tech);
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: rgba(0, 255, 136, 0.15);
+      border: 1px solid rgba(0, 255, 136, 0.4);
+      color: var(--green);
+    }
+
+    /* RPM Tachometer Bar */
+    .rpm-container {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.85rem;
+      margin-bottom: 0.85rem;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    }
+    .rpm-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 6px;
+    }
+    .rpm-num {
+      font-family: var(--font-racing);
+      font-size: 2.8rem;
+      font-weight: 900;
+      color: var(--cyan);
+      line-height: 1;
+      text-shadow: var(--glow-cyan);
+    }
+    .rpm-num.redline {
+      color: var(--red);
+      text-shadow: var(--glow-red);
+      animation: flash 0.15s infinite alternate;
+    }
+    .rpm-track {
+      width: 100%;
+      height: 22px;
+      background: #151a22;
+      border-radius: 4px;
+      overflow: hidden;
+      display: flex;
+      border: 1px solid #283344;
+    }
+    .rpm-fill {
+      height: 100%;
+      width: 25%;
+      background: linear-gradient(to right, var(--green) 0%, var(--amber) 65%, var(--red) 85%);
+      transition: width 0.08s linear;
+    }
+    .rpm-ticks {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--font-tech);
+      font-size: 0.7rem;
+      color: #64748b;
+      margin-top: 4px;
+    }
+
+    /* Grid Parameter (AFR, Suhu, TPS, Volt) */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 0.85rem;
+    }
+    .metric-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .card-label {
+      font-family: var(--font-tech);
+      font-size: 0.75rem;
+      color: #94a3b8;
+      letter-spacing: 1px;
+    }
+    .card-val {
+      font-family: var(--font-racing);
+      font-size: 1.9rem;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1.1;
+      margin: 4px 0;
+    }
+    .afr-val { color: var(--green); }
+    .afr-val.lean { color: var(--red); }
+    .afr-val.rich { color: var(--cyan); }
+    .card-sub {
+      font-size: 0.7rem;
+      color: #64748b;
+    }
+
+    /* Map Switcher Touch Grid */
+    .map-section {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.85rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .section-title {
+      font-family: var(--font-tech);
+      font-size: 0.8rem;
+      color: var(--amber);
+      letter-spacing: 1px;
+      margin-bottom: 0.6rem;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    .maps-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.5rem;
+    }
+    .btn-map {
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid #2d3748;
+      border-radius: 8px;
+      padding: 0.85rem 0.25rem;
+      color: #94a3b8;
+      font-family: var(--font-racing);
+      font-size: 1.1rem;
+      font-weight: 900;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s ease;
+    }
+    .btn-map .map-sub {
+      font-family: var(--font-tech);
+      font-size: 0.65rem;
+      font-weight: 600;
+      color: #64748b;
+    }
+    .btn-map:active { transform: scale(0.95); }
+    .btn-map.active {
+      background: rgba(0, 240, 255, 0.15);
+      border-color: var(--cyan);
+      color: var(--cyan);
+      box-shadow: var(--glow-cyan);
+    }
+    .btn-map.active .map-sub { color: #fff; }
+
+    @keyframes flash {
+      from { opacity: 0.4; } to { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="brand-title">RACE PANEL <span>MX-KING</span></div>
+    <div class="status-badge" id="status-badge">DEMO MODE</div>
+  </header>
+
+  <!-- Tachometer RPM -->
+  <div class="rpm-container">
+    <div class="rpm-header">
+      <span class="card-label">ENGINE SPEED (RPM)</span>
+      <span class="rpm-num" id="rpm-val">2,850</span>
+    </div>
+    <div class="rpm-track">
+      <div class="rpm-fill" id="rpm-bar" style="width: 25%;"></div>
+    </div>
+    <div class="rpm-ticks">
+      <span>0</span><span>3K</span><span>6K</span><span>9K</span><span>12K</span><span>14K</span>
+    </div>
+  </div>
+
+  <!-- Telemetry 4-Card Grid -->
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <span class="card-label">AIR-FUEL RATIO</span>
+      <span class="card-val afr-val" id="afr-val">12.9</span>
+      <span class="card-sub" id="afr-sub">TARGET: 12.8 - 13.2</span>
+    </div>
+
+    <div class="metric-card">
+      <span class="card-label">ENGINE TEMP</span>
+      <span class="card-val" id="temp-val">88°C</span>
+      <span class="card-sub">NORMAL: 80 - 95°C</span>
+    </div>
+
+    <div class="metric-card">
+      <span class="card-label">THROTTLE (TPS)</span>
+      <span class="card-val" id="tps-val">18%</span>
+      <span class="card-sub">SENSOR VALVE</span>
+    </div>
+
+    <div class="metric-card">
+      <span class="card-label">BATTERY VOLT</span>
+      <span class="card-val" id="volt-val">13.8V</span>
+      <span class="card-sub">CHARGING SYSTEM</span>
+    </div>
+  </div>
+
+  <!-- Map Switcher Touch Controls -->
+  <div class="map-section">
+    <div class="section-title">SELECT ECU MAPPING PROFILE</div>
+    <div class="maps-grid">
+      <button class="btn-map active" data-map="1" id="map-1" onclick="switchMap(1)">
+        <span>M1</span>
+        <span class="map-sub">HARIAN</span>
+      </button>
+      <button class="btn-map" data-map="2" id="map-2" onclick="switchMap(2)">
+        <span>M2</span>
+        <span class="map-sub">TOURING</span>
+      </button>
+      <button class="btn-map" data-map="3" id="map-3" onclick="switchMap(3)">
+        <span>M3</span>
+        <span class="map-sub">RACE</span>
+      </button>
+      <button class="btn-map" data-map="4" id="map-4" onclick="switchMap(4)">
+        <span>M4</span>
+        <span class="map-sub">BACKFIRE</span>
+      </button>
+    </div>
+  </div>
+
+  <script>
+    let activeMap = 1;
+    function switchMap(mapNum) {
+      activeMap = mapNum;
+      for (let i = 1; i <= 4; i++) {
+        const btn = document.getElementById(`map-${i}`);
+        if (btn) btn.classList.toggle('active', i === mapNum);
+      }
+    }
+
+    // Live Telemetry Simulation Animation for Desktop Preview
+    let angle = 0;
+    setInterval(() => {
+      angle += 0.08;
+      const rpm = Math.round(2000 + Math.abs(Math.sin(angle)) * 9500 + Math.random() * 200);
+      const rpmEl = document.getElementById('rpm-val');
+      rpmEl.textContent = rpm.toLocaleString();
+      rpmEl.classList.toggle('redline', rpm > 11500);
+
+      const percent = Math.min(100, (rpm / 14000) * 100);
+      document.getElementById('rpm-bar').style.width = percent + '%';
+
+      const afr = +(12.5 + Math.sin(angle * 0.4) * 0.8).toFixed(1);
+      const afrEl = document.getElementById('afr-val');
+      afrEl.textContent = afr;
+      afrEl.className = 'card-val afr-val ' + (afr < 12.2 ? 'rich' : (afr > 13.4 ? 'lean' : ''));
+
+      document.getElementById('temp-val').textContent = (86 + Math.round(Math.sin(angle * 0.1) * 5)) + '°C';
+      document.getElementById('tps-val').textContent = Math.round(Math.min(100, Math.max(0, (rpm - 1800) / 95))) + '%';
+      document.getElementById('volt-val').textContent = (13.6 + Math.sin(angle * 0.2) * 0.3).toFixed(1) + 'V';
+    }, 100);
+  </script>
+</body>
+</html>
